@@ -1,8 +1,11 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useEffect, useState, FormEvent } from 'react';
 import { FiChevronRight } from 'react-icons/fi';
+import { Link } from 'react-router-dom';
 
 import api from '../../services/api';
-import { Title, Form, Repositories } from './styles';
+import {
+  Title, Form, Repositories, Error,
+} from './styles';
 import logo from '../../assets/logo.svg';
 
 interface Repository {
@@ -16,49 +19,75 @@ interface Repository {
 
 const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [repositories, setRepositories] = useState<Repository[]>(() => {
+    const storagedRepositories = localStorage.getItem('@GithubExplorer:repositories');
 
-  async function handleAddRepository(e: FormEvent<HTMLFormElement>,): Promise<void> {
+    if (storagedRepositories) {
+      return JSON.parse(storagedRepositories);
+    }
+
+    return [];
+  });
+  const [inputError, setInputError] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('@GithubExplorer:repositories', JSON.stringify(repositories));
+  }, [repositories]);
+
+  async function handleAddRepository(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
-    const response = await api.get<Repository>(`repos/${searchTerm}`);
 
-    const repository = response.data;
+    if (!searchTerm) {
+      setInputError('Type the author/repository name');
+      return;
+    }
 
-    setRepositories([...repositories, repository]);
-    setSearchTerm('');
+    try {
+      const response = await api.get<Repository>(`repos/${searchTerm}`);
+
+      const repository = response.data;
+
+      setRepositories([...repositories, repository]);
+      setSearchTerm('');
+      setInputError('');
+    } catch (err) {
+      setInputError('Search failed to find any repositories.');
+    }
   }
-  
-  
+
   return (
     <>
-      <img src={logo} alt="Github explorer" />  
+      <img src={logo} alt="Github explorer" />
       <Title>Explore Github repositories</Title>
 
-      <Form onSubmit={handleAddRepository}>
-        <input 
-        value={searchTerm}
-        placeholder="Type the name of the repository" onChange={(e) => setSearchTerm(e.target.value)} />
+      <Form onSubmit={handleAddRepository} hasError={!!inputError}>
+        <input
+          value={searchTerm}
+          placeholder="Type the name of the repository"
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
         <button type="submit">Search</button>
       </Form>
 
+      {inputError && <Error>{inputError}</Error>}
+
       <Repositories>
-        {repositories.map(repo => (
-          <a key={repo.full_name} href="test">
-            <img src={repo.owner.avatar_url} alt={repo.owner.login}></img>
-            
+        {repositories.map((repo) => (
+          <Link key={repo.full_name} to={`/repository/${repo.full_name}`}>
+            <img src={repo.owner.avatar_url} alt={repo.owner.login} />
+
             <div>
               <strong>{repo.full_name}</strong>
               <p>{repo.description}</p>
             </div>
 
             <FiChevronRight size={20} />
-          </a>
+          </Link>
         ))}
-               
+
       </Repositories>
     </>
-  )
-}
-
+  );
+};
 
 export default Dashboard;
